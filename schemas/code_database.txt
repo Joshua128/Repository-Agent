@@ -1,0 +1,36 @@
+SCHEMA TO DEVELOP database to store code documents 
+
+repository:
+-path 
+-url 
+-id 
+
+
+
+file:
+-repo_id (references repository id)
+-id 
+-hash_code (implement later, used to see if changes were made)
+
+
+symbols:
+-file_id (references given file)
+-type (func, class, etc)
+-signature
+-docstring 
+
+
+
+edges
+- id
+- repo_id
+- source_type
+- source_id
+- target_type
+- target_id
+- relationship_type: imports/calls/inherits/contains
+
+
+
+
+
