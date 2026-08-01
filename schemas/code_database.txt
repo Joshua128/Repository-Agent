@@ -2,7 +2,7 @@ SCHEMA TO DEVELOP database to store code documents
 
 repository:
 -path 
--url 
+-url?
 -id 
 
 

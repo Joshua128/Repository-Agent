@@ -3,15 +3,21 @@ from collections import defaultdict
 
 
 class NodeWalk(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self, file_name, file_hash, source_code):
+        self.file_name = file_name
+        self.file_hash = file_hash
+        self.source_code = source_code
         self.func_lines = defaultdict(tuple)
         self.func_stack = []
+        
         self.func_dic = defaultdict(list)
+        
 
     def visit_FunctionDef(self, node):
         
         self.func_lines[node.name] = (node.lineno, node.end_lineno)
         self.func_stack.append(node.name)
+        
         self.generic_visit(node)
         self.func_stack.pop()
 
@@ -27,6 +33,7 @@ class NodeWalk(ast.NodeVisitor):
             if self.func_stack:
                 self.func_dic[self.func_stack[-1]].append(func_name)
         self.generic_visit(node)
+        
 
 
 

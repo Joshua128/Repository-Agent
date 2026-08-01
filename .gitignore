@@ -2,6 +2,8 @@ __pycache__/
 *.py[cod]
 .env 
 .vscode/
-*.db
-db.sqlite3call_graph.db
+db.sqlite3
 repositories/
+.streamlit/
+__pycache__/
+*.pyc

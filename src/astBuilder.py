@@ -1,5 +1,6 @@
 import ast  
 from pathlib import Path
+import hashFIle
 
 class astBuild():
 
@@ -12,10 +13,13 @@ class astBuild():
         for file in self.read_entire_dir(self.path):
             with open(file, 'r') as f:
                 source_code = f.read()
-                file_name = str(file).split("\\")[-1]
-                print(f"File name: {file_name}")
+                file_name = Path(file).name
+                #store relative path name including subfolder relative to the repo root
+                file_path = str(file.relative_to(self.path))
+                print(f"File path: {file_path}")
                 self.ast_tree = ast.parse(source_code)
-                self.parsed_files[file_name] = self.ast_tree
+                file_hash = hashFIle.hash_file(file)
+                self.parsed_files[file_path] = (self.ast_tree, source_code, file_hash)
 
 
     
