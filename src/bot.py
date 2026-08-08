@@ -115,13 +115,18 @@ def create_repository_agent() -> Any:
             file_name TEXT,
             file_path TEXT
         )
-        function_table(
+        symbol_table(
             id INTEGER PRIMARY KEY,
             file_id INTEGER REFERENCES file_table(id),
-            function_name TEXT,
-            function_type TEXT,
+            name TEXT,
+            qualified_name TEXT,
+            symbol_type TEXT,
+            parent_symbol_id INTEGER REFERENCES symbol_table(id),
             line_start INTEGER,
-            line_end INTEGER
+            line_end INTEGER,
+            signature TEXT,
+            docstring TEXT,
+            decorators TEXT
         )
         raw_text_table(
             id INTEGER PRIMARY KEY,
@@ -129,14 +134,24 @@ def create_repository_agent() -> Any:
             hash_code TEXT,
             raw_text TEXT
         )
+        import_table(
+            id INTEGER PRIMARY KEY,
+            file_id INTEGER REFERENCES file_table(id),
+            module TEXT,
+            imported_name TEXT,
+            local_name TEXT,
+            line_number INTEGER
+        )
         edge_table(
             id INTEGER PRIMARY KEY,
             repo_id INTEGER REFERENCES repo_table(id),
-            source_type TEXT,
-            source_id INTEGER,
-            target_type TEXT,
-            target_id INTEGER,
-            relationship_type TEXT
+            source_symbol_id INTEGER REFERENCES symbol_table(id),
+            target_symbol_id INTEGER REFERENCES symbol_table(id),
+            relationship_type TEXT,
+            target_expression TEXT,
+            target_name TEXT,
+            line_number INTEGER,
+            resolution_status TEXT
         )
 
         raw_text_table.raw_text contains the complete source code of each parsed
@@ -147,10 +162,14 @@ def create_repository_agent() -> Any:
         JOIN file_table f ON f.repo_id = r.id
         JOIN raw_text_table t ON t.file_id = f.id
 
-        Functions belong to files through function_table.file_id. Call edges use
-        edge_table.source_id and edge_table.target_id to reference
-        function_table.id. Filter by repo_table.repo_name or repo_table.id so
-        results from different repositories are never mixed.
+        Classes, functions, methods, async callables, and nested definitions are
+        stored in symbol_table. qualified_name identifies their lexical scope and
+        parent_symbol_id records containment. Graph relationships include calls,
+        instantiates, inherits, and contains. edge_table.target_symbol_id is NULL
+        when resolution_status is ambiguous or unresolved; target_expression
+        preserves the code that was written. Never present an unresolved edge as
+        a verified relationship. Filter by repo_table.repo_name or repo_table.id
+        so results from different repositories are never mixed.
 
         For repository questions, query the relevant database rows before
         answering. Do not claim that you cannot inspect local code merely
@@ -232,21 +251,40 @@ def _database_context(message: str) -> str:
             """,
             (repo_id,),
         ).fetchall()
-        functions = connection.execute(
+        symbols = connection.execute(
             """
-            SELECT f.file_name, fn.function_name, fn.line_start, fn.line_end
+            SELECT f.file_name, s.qualified_name, s.symbol_type,
+                   s.line_start, s.line_end
             FROM file_table AS f
-            JOIN function_table AS fn ON fn.file_id = f.id
+            JOIN symbol_table AS s ON s.file_id = f.id
             WHERE f.repo_id = ?
-            ORDER BY f.file_name, fn.line_start
+            ORDER BY f.file_name, s.line_start
+            """,
+            (repo_id,),
+        ).fetchall()
+        relationships = connection.execute(
+            """
+            SELECT source.qualified_name, e.relationship_type,
+                   COALESCE(target.qualified_name, e.target_expression),
+                   e.resolution_status
+            FROM edge_table AS e
+            JOIN symbol_table AS source ON source.id = e.source_symbol_id
+            LEFT JOIN symbol_table AS target ON target.id = e.target_symbol_id
+            WHERE e.repo_id = ?
+            ORDER BY source.qualified_name, e.line_number
+            LIMIT 500
             """,
             (repo_id,),
         ).fetchall()
 
     catalog = ", ".join(repo[1] for repo in repositories)
-    function_summary = "\n".join(
-        f"- {file_name}: {name} (lines {start}-{end})"
-        for file_name, name, start, end in functions
+    symbol_summary = "\n".join(
+        f"- {file_name}: {name} [{symbol_type}] (lines {start}-{end})"
+        for file_name, name, symbol_type, start, end in symbols
+    )
+    relationship_summary = "\n".join(
+        f"- {source} --{relationship}--> {target} [{status}]"
+        for source, relationship, target, status in relationships
     )
     source_sections: list[str] = []
     used = 0
@@ -280,8 +318,11 @@ Available repositories: {catalog}
 Selected repository: {repo_name}
 Hash synchronization: {refresh_note}
 
-Functions:
-{function_summary or "(no functions recorded)"}
+Symbols:
+{symbol_summary or "(no symbols recorded)"}
+
+Relationships:
+{relationship_summary or "(no relationships recorded)"}
 
 Stored source:
 {''.join(source_sections) or "(no source recorded)"}

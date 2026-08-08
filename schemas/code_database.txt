@@ -1,36 +1,54 @@
-SCHEMA TO DEVELOP database to store code documents 
+Repository symbol-graph schema
+==============================
 
-repository:
--path 
--url?
--id 
-
-
-
-file:
--repo_id (references repository id)
--id 
--hash_code (implement later, used to see if changes were made)
-
-
-symbols:
--file_id (references given file)
--type (func, class, etc)
--signature
--docstring 
-
-
-
-edges
+repo_table
 - id
-- repo_id
-- source_type
-- source_id
-- target_type
-- target_id
-- relationship_type: imports/calls/inherits/contains
+- repo_name
+- path (unique repository location)
 
+file_table
+- id
+- repo_id -> repo_table.id
+- file_name (repository-relative path)
+- file_path (absolute local path)
 
+raw_text_table
+- id
+- file_id -> file_table.id
+- hash_code
+- raw_text
 
+symbol_table
+- id
+- file_id -> file_table.id
+- name
+- qualified_name (for example LinkedList.append)
+- symbol_type (class/function/method/async_function/async_method)
+- parent_symbol_id -> symbol_table.id
+- line_start / line_end
+- signature
+- docstring
+- decorators (newline-separated expressions)
 
+import_table
+- id
+- file_id -> file_table.id
+- module
+- imported_name
+- local_name (including aliases)
+- line_number
 
+edge_table
+- id
+- repo_id -> repo_table.id
+- source_symbol_id -> symbol_table.id
+- target_symbol_id -> symbol_table.id (nullable)
+- relationship_type (contains/calls/instantiates/inherits)
+- target_expression (the original source expression)
+- target_name (simple target name)
+- line_number
+- resolution_status (resolved/ambiguous/unresolved/external)
+
+An edge is verified only when resolution_status is "resolved" and
+target_symbol_id is populated. Ambiguous, unresolved, and external references
+remain stored so the application does not silently discard evidence.
